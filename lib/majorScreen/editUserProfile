@@ -1,0 +1,342 @@
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart' as fbs;
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as path;
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+class EditUserProfile extends StatefulWidget {
+  @override
+  _EditUserProfileState createState() => _EditUserProfileState();
+}
+
+class _EditUserProfileState extends State<EditUserProfile> {
+  final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+  TextEditingController? nameController;
+  TextEditingController? emailController;
+  TextEditingController? phoneController;
+  String? pickedProfileImage;
+  bool processing = false;
+
+  XFile? imageFile;
+  dynamic pickedImageError;
+
+  @override
+  void initState() {
+    super.initState();
+    nameController = TextEditingController();
+    emailController = TextEditingController();
+    phoneController = TextEditingController();
+    loadProfileData();
+  }
+
+  void loadProfileData() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+
+      if (currentUser != null) {
+        final snapshot = await FirebaseFirestore.instance
+            .collection('userProfiles')
+            .doc(currentUser.uid)
+            .get();
+
+        if (snapshot.exists) {
+          final data = snapshot.data() as Map<String, dynamic>;
+          nameController!.text = data['name'];
+          emailController!.text = currentUser.email ?? '';
+          phoneController!.text = data['phone'] ?? '';
+          pickedProfileImage = data['profile_image'];
+        }
+      }
+    } catch (e) {
+      print('Error loading profile data: $e');
+    }
+  }
+
+  void imagePicker() async {
+    try {
+      final pickedImage = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxHeight: 300,
+        maxWidth: 300,
+        imageQuality: 95,
+      );
+      if (pickedImage != null) {
+        setState(() {
+          imageFile = pickedImage;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        pickedImageError = e;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    nameController!.dispose();
+    emailController!.dispose();
+    phoneController!.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: const Color(0xff252525),
+        centerTitle: true,
+        title: const Text('Edit Profile'),
+        elevation: 0,
+      ),
+      backgroundColor: Color(0xffe6ebec),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          reverse: true,
+          scrollDirection: Axis.vertical,
+          child: Form(
+            key: formKey,
+            child: Padding(
+              padding: const EdgeInsets.all(10.0),
+              child: Column(
+                children: [
+                  Center(
+                    child: GestureDetector(
+                      onTap: () {
+                        imagePicker();
+                      },
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Container(
+                            width: 140,
+                            height: 140,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.grey[300]!,
+                                width: 2,
+                              ),
+                            ),
+                            child: imageFile != null
+                                ? ClipOval(
+                                    child: Image.file(
+                                      File(imageFile!.path),
+                                      width: 140,
+                                      height: 140,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  )
+                                : (pickedProfileImage != null
+                                    ? ClipOval(
+                                        child: Image.network(
+                                          pickedProfileImage!,
+                                          width: 140,
+                                          height: 140,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      )
+                                    : Icon(
+                                        Icons.camera_alt,
+                                        size: 70,
+                                        color: Colors.grey[300],
+                                      )),
+                          ),
+                          if (pickedImageError != null)
+                            Text(
+                              "Error loading image",
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 14,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(
+                    height: 20,
+                  ),
+                  Column(
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: TextFormField(
+                          controller: nameController,
+                          decoration: InputDecoration(
+                            labelText: 'Name',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            hintText: 'Enter your name',
+                            hintStyle: TextStyle(
+                              color: Colors.grey[300],
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        height: 20,
+                      ),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: TextFormField(
+                          controller: emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          enabled: false, // Disable email editing
+                          decoration: InputDecoration(
+                            labelText: 'Email',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            hintText: 'Enter your email',
+                            hintStyle: TextStyle(
+                              color: Colors.grey[300],
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        height: 20,
+                      ),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: TextFormField(
+                          controller: phoneController,
+                          keyboardType: TextInputType.phone,
+                          decoration: InputDecoration(
+                            labelText: 'Phone',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            hintText: 'Enter your phone number',
+                            hintStyle: TextStyle(
+                              color: Colors.grey[300],
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(
+                        height: 30,
+                      ),
+                      Center(
+                        child: Container(
+                          height: 40,
+                          width: 250,
+                          margin: const EdgeInsets.symmetric(horizontal: 60),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(50),
+                            gradient: LinearGradient(
+                              colors: [
+                                Color(0xFF0E1A1A),
+                                Color(0xFF03130E),
+                              ],
+                            ),
+                          ),
+                          child: TextButton(
+                            onPressed: () {
+                              editUserProfile();
+                            },
+                            child: Text(
+                              'Save Changes',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void editUserProfile() async {
+    // Check if any input is missing
+    if (nameController!.text.isEmpty ||
+        phoneController!.text.isEmpty) {
+      // Show a snackbar if any input is missing
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please fill in all fields.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      processing = true;
+    });
+
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+
+      if (imageFile != null) {
+        // Upload a new image if a new one is selected
+        fbs.Reference ref = fbs.FirebaseStorage.instance.ref(
+          'userProfiles/${currentUser!.uid}/${path.basename(imageFile!.path)}',
+        );
+
+        await ref.putFile(File(imageFile!.path));
+        pickedProfileImage = await ref.getDownloadURL();
+      }
+
+      CollectionReference userProfile =
+          FirebaseFirestore.instance.collection('userProfiles');
+
+      await userProfile.doc(currentUser!.uid).set({
+        'name': nameController!.text,
+        'phone': phoneController!.text,
+        if (pickedProfileImage != null) 'profile_image': pickedProfileImage,
+      }, SetOptions(merge: true));
+
+      setState(() {
+        processing = false;
+        imageFile = null;
+      });
+
+      // Show a snackbar when the profile is edited successfully
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Profile edited successfully!'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      setState(() {
+        processing = false;
+      });
+      print('Error editing profile: $e');
+      // Show a snackbar for error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error editing profile. Please try again later.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+}
